@@ -125,7 +125,7 @@ flags.DEFINE_integer(
 
 
 class InputExample(object):
-  """A single training/test example for simple sequence classification."""
+  """A single training/test example for simple sequence regression."""
 
   def __init__(self, guid, text_a, text_b=None, label=None):
     """Constructs a InputExample.
@@ -145,6 +145,7 @@ class InputExample(object):
     self.label = label
 
 
+
 class InputFeatures(object):
   """A single set of features of data."""
 
@@ -156,7 +157,7 @@ class InputFeatures(object):
 
 
 class DataProcessor(object):
-  """Base class for data converters for sequence classification data sets."""
+  """Base class for data converters for sequence regression data sets."""
 
   def get_train_examples(self, data_dir):
     """Gets a collection of `InputExample`s for the train set."""
@@ -313,7 +314,6 @@ class MrpcProcessor(DataProcessor):
           InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
     return examples
 
-
 class ColaProcessor(DataProcessor):
   """Processor for the CoLA data set (GLUE version)."""
 
@@ -361,7 +361,7 @@ class ArdProcessor(DataProcessor):
   def read_tsv(self, path):
     df = pd.read_csv(path, sep="\t")
     return [(str(text), str(label)) for text,label in zip(df['reviewText'],
-                                                          df['helpful_bin'])]
+                                                          df['helpful_rate'])]
 
 
   def get_train_examples(self, data_dir):
@@ -379,10 +379,6 @@ class ArdProcessor(DataProcessor):
     return self._create_examples(
       self.read_tsv(os.path.join(data_dir, "test.tsv")), "test")
 
-  def get_labels(self):
-    """See base class."""
-    return ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
     examples = []
@@ -393,7 +389,6 @@ class ArdProcessor(DataProcessor):
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
     return examples
-
 
 
 def convert_single_example(ex_index, example, label_list, max_seq_length,
