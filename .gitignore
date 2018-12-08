@@ -119,3 +119,4 @@ dmypy.json
 glue_data/
 multilingual_L-12_H-768_A-12/
 fine_tuned/
+tmp/
