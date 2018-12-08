@@ -172,10 +172,6 @@ class DataProcessor(object):
     """Gets a collection of `InputExample`s for prediction."""
     raise NotImplementedError()
 
-  def get_labels(self):
-    """Gets the list of labels for this data set."""
-    raise NotImplementedError()
-
   @classmethod
   def _read_tsv(cls, input_file, quotechar=None):
     """Reads a tab separated value file."""
@@ -392,12 +388,9 @@ class ArdProcessor(DataProcessor):
     return examples
 
 
-def convert_single_example(ex_index, example, label_list, max_seq_length,
+def convert_single_example(ex_index, example, max_seq_length,
                            tokenizer):
   """Converts a single `InputExample` into a single `InputFeatures`."""
-  label_map = {}
-  for (i, label) in enumerate(label_list):
-    label_map[label] = i
 
   tokens_a = tokenizer.tokenize(example.text_a)
   tokens_b = None
@@ -465,7 +458,7 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
   assert len(input_mask) == max_seq_length
   assert len(segment_ids) == max_seq_length
 
-  label_id = label_map[example.label]
+  # label_id = label_map[example.label]
   if ex_index < 5:
     tf.logging.info("*** Example ***")
     tf.logging.info("guid: %s" % (example.guid))
@@ -485,7 +478,7 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
 
 
 def file_based_convert_examples_to_features(
-    examples, label_list, max_seq_length, tokenizer, output_file):
+    examples, max_seq_length, tokenizer, output_file):
   """Convert a set of `InputExample`s to a TFRecord file."""
 
   writer = tf.python_io.TFRecordWriter(output_file)
@@ -494,7 +487,7 @@ def file_based_convert_examples_to_features(
     if ex_index % 10000 == 0:
       tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
-    feature = convert_single_example(ex_index, example, label_list,
+    feature = convert_single_example(ex_index, example,
                                      max_seq_length, tokenizer)
 
     def create_int_feature(values):
@@ -576,8 +569,8 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
-                 labels, num_labels, use_one_hot_embeddings):
-  """Creates a classification model."""
+                 values, use_one_hot_embeddings):
+  """Creates a regression model."""
   model = modeling.BertModel(
       config=bert_config,
       is_training=is_training,
@@ -585,6 +578,8 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings)
+
+  num_labels = 1
 
   # In the demo, we are doing a simple classification task on the entire
   # segment.
@@ -609,15 +604,12 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
     logits = tf.matmul(output_layer, output_weights, transpose_b=True)
     logits = tf.nn.bias_add(logits, output_bias)
-    probabilities = tf.nn.softmax(logits, axis=-1)
-    log_probs = tf.nn.log_softmax(logits, axis=-1)
+    #probabilities = tf.nn.softmax(logits, axis=-1)
+    #log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-    one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
+    loss = tf.losses.mean_squared_error(values,logits)
 
-    per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-    loss = tf.reduce_mean(per_example_loss)
-
-    return (loss, per_example_loss, logits, probabilities)
+    return (loss, logits)
 
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
@@ -759,7 +751,7 @@ def input_fn_builder(features, seq_length, is_training, drop_remainder):
 
 # This function is not used by this file but is still used by the Colab and
 # people who depend on it.
-def convert_examples_to_features(examples, label_list, max_seq_length,
+def convert_examples_to_features(examples, max_seq_length,
                                  tokenizer):
   """Convert a set of `InputExample`s to a list of `InputFeatures`."""
 
@@ -768,7 +760,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     if ex_index % 10000 == 0:
       tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
-    feature = convert_single_example(ex_index, example, label_list,
+    feature = convert_single_example(ex_index, example,
                                      max_seq_length, tokenizer)
 
     features.append(feature)
@@ -807,7 +799,7 @@ def main(_):
 
   processor = processors[task_name]()
 
-  label_list = processor.get_labels()
+  # label_list = processor.get_labels()
 
   tokenizer = tokenization.FullTokenizer(
       vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
@@ -839,7 +831,7 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      num_labels=len(label_list),
+      # num_labels=len(label_list),
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=FLAGS.learning_rate,
       num_train_steps=num_train_steps,
@@ -860,7 +852,7 @@ def main(_):
   if FLAGS.do_train:
     train_file = os.path.join(FLAGS.output_dir, "train.tf_record")
     file_based_convert_examples_to_features(
-        train_examples, label_list, FLAGS.max_seq_length, tokenizer, train_file)
+        train_examples, FLAGS.max_seq_length, tokenizer, train_file)
     tf.logging.info("***** Running training *****")
     tf.logging.info("  Num examples = %d", len(train_examples))
     tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
@@ -876,7 +868,7 @@ def main(_):
     eval_examples = processor.get_dev_examples(FLAGS.data_dir)
     eval_file = os.path.join(FLAGS.output_dir, "eval.tf_record")
     file_based_convert_examples_to_features(
-        eval_examples, label_list, FLAGS.max_seq_length, tokenizer, eval_file)
+        eval_examples, FLAGS.max_seq_length, tokenizer, eval_file)
 
     tf.logging.info("***** Running evaluation *****")
     tf.logging.info("  Num examples = %d", len(eval_examples))
@@ -910,7 +902,7 @@ def main(_):
   if FLAGS.do_predict:
     predict_examples = processor.get_test_examples(FLAGS.data_dir)
     predict_file = os.path.join(FLAGS.output_dir, "predict.tf_record")
-    file_based_convert_examples_to_features(predict_examples, label_list,
+    file_based_convert_examples_to_features(predict_examples,
                                             FLAGS.max_seq_length, tokenizer,
                                             predict_file)
 
