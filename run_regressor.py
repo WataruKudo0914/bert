@@ -382,7 +382,7 @@ class ArdProcessor(DataProcessor):
     for (i, line) in enumerate(lines):
       guid = "%s-%s" % (set_type, i)
       text_a = tokenization.convert_to_unicode(line[0])
-      label = tokenization.convert_to_unicode(line[1])
+      label = float(tokenization.convert_to_unicode(line[1]))
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
     return examples
@@ -458,7 +458,7 @@ def convert_single_example(ex_index, example, max_seq_length,
   assert len(input_mask) == max_seq_length
   assert len(segment_ids) == max_seq_length
 
-  # label_id = label_map[example.label]
+  label_id = example.label
   if ex_index < 5:
     tf.logging.info("*** Example ***")
     tf.logging.info("guid: %s" % (example.guid))
@@ -467,7 +467,6 @@ def convert_single_example(ex_index, example, max_seq_length,
     tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
     tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
     tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-    tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
   feature = InputFeatures(
       input_ids=input_ids,
@@ -736,7 +735,7 @@ def input_fn_builder(features, seq_length, is_training, drop_remainder):
                 shape=[num_examples, seq_length],
                 dtype=tf.int32),
         "label_ids":
-            tf.constant(all_label_ids, shape=[num_examples], dtype=tf.int32),
+            tf.constant(all_label_ids, shape=[num_examples], dtype=tf.float32),
     })
 
     if is_training:
